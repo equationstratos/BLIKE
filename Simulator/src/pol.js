@@ -267,21 +267,13 @@ export class POL {
   }
 
   /**
-   * Nonlinear effects vector (POL::calculate_nle).
-   *
-   * `gyro` below is the velocity-coupling coefficient the firmware writes out
-   * twice: it is the psi_dot^2 factor of the pitch equation and, doubled, the
-   * psi_dot*theta_dot factor of the yaw equation.
-   *
-   * The firmware's yaw equation closes that second parenthesis early, so its
-   * last three terms land straight in nle(2) instead of being scaled by
-   * psi_dot*theta_dot. That leaves a constant yaw acceleration (~2.3 rad/s^2
-   * at rest, no torque applied), which is not what the hardware does. It is an
-   * operator-precedence slip rather than a modelling choice - the terms are
-   * exactly twice the matching ones in the pitch equation - so we group them
-   * as intended.
+   * Coefficients shared by the nonlinear effects vector and its Jacobians,
+   * together with their theta derivatives. Deriving both from one place is
+   * what keeps `nle` and `jacobians` consistent with each other - the firmware
+   * writes each of these out by hand several times over, which is where its
+   * index slips crept in (see the note on `jacobians`).
    */
-  nle(theta, thetaDot, v, psiDot) {
+  modelCoefficients(theta) {
     const IB = this.I_B_B;
     const LW = this.I_LW;
     const RW = this.I_RW;
@@ -295,45 +287,181 @@ export class POL {
     const st = Math.sin(theta);
     const ct2 = ct * ct;
     const sc = st * ct;
-    const h2 = h * h;
+    const c2t = 2 * ct2 - 1; // cos(2 theta), the derivative factor of sin*cos
+
+    // Yaw-axis inertia sums, and the pitch-roll coupling group.
+    const G0 = at(IB, 2, 2) + at(LW, 2, 2) + at(RW, 2, 2);
+    const X =
+      at(IB, 0, 0) - at(IB, 2, 2) + at(LW, 0, 0) + at(RW, 0, 0) -
+      at(LW, 2, 2) - at(RW, 2, 2);
+    const P1 = 2 * pc[0] * (h + pc[2]);
+    const P2 = 2 * h * pc[2] + h * h - pc[0] * pc[0] + pc[2] * pc[2];
+
+    // Differential wheel term.
+    const dl = at(LW, 1, 0) - at(RW, 1, 0);
+    const dr = at(LW, 2, 1) - at(RW, 2, 1);
+    const Lterm = (L * (ct * dl + st * dr)) / R;
+    const dLterm = (L * (-st * dl + ct * dr)) / R;
+
+    // Velocity-coupling coefficient: the psi_dot^2 factor of the pitch
+    // equation, and (doubled) the psi_dot*theta_dot factor of the yaw one.
+    const gyro =
+      G0 -
+      mB * (h * pc[0] + pc[0] * pc[2] - ct2 * P1 - sc * P2) -
+      2 * ct2 * G0 +
+      sc * X +
+      Lterm;
+    const dGyro = -mB * (2 * sc * P1 - c2t * P2) + 4 * sc * G0 + c2t * X + dLterm;
+
+    // Wheel gyroscopic coupling.
+    const sl = at(LW, 1, 0) + at(RW, 1, 0);
+    const sr = at(LW, 2, 1) + at(RW, 2, 1);
+    const W = (ct * sl + st * sr) / R;
+    const dW = (-st * sl + ct * sr) / R;
+
+    // Body pendulum term, and the yaw equation's theta_dot^2 coefficient.
+    const pend = st * (h + pc[2]) + pc[0] * ct;
+    const dPend = ct * (h + pc[2]) - pc[0] * st;
+    const A =
+      -mB * (st * (pc[1] * (h + pc[2])) + pc[0] * pc[1] * ct) +
+      at(IB, 1, 1) * ct + at(IB, 2, 2) * st;
+    const dA =
+      -mB * (ct * (pc[1] * (h + pc[2])) - pc[0] * pc[1] * st) -
+      at(IB, 1, 1) * st + at(IB, 2, 2) * ct;
+
+    return { ct, st, ct2, sc, c2t, gyro, dGyro, W, dW, pend, dPend, A, dA, X, P1, P2, G0 };
+  }
+
+  /**
+   * Nonlinear effects vector (POL::calculate_nle).
+   *
+   * The firmware's yaw equation closes a parenthesis early, so its last three
+   * terms land straight in nle(2) instead of being scaled by psi_dot*theta_dot.
+   * That leaves a constant yaw acceleration (~2.3 rad/s^2 at rest, no torque
+   * applied), which is not what the hardware does. Its own derivative,
+   * calculate_dnle_dtheta, groups those terms inside the psi_dot*theta_dot
+   * factor - so the firmware disagrees with itself, and it is nle(2) that is
+   * wrong. We group them as intended.
+   */
+  nle(theta, thetaDot, v, psiDot) {
+    const c = this.modelCoefficients(theta);
     const td2 = thetaDot * thetaDot;
     const pd2 = psiDot * psiDot;
 
-    // Wheel gyroscopic coupling, shared by the pitch and yaw equations.
-    const wheelCoupling =
-      (ct * (at(LW, 1, 0) + at(RW, 1, 0)) + st * (at(LW, 2, 1) + at(RW, 2, 1))) / R;
+    return [
+      -pd2 * c.gyro - GRAVITY * this.mB * c.pend + psiDot * v * c.W,
+      -this.mB * td2 * c.pend - psiDot * thetaDot * c.W,
+      -td2 * c.A + psiDot * thetaDot * 2 * c.gyro - thetaDot * v * c.W,
+    ];
+  }
 
-    const gyro =
-      at(IB, 2, 2) + at(LW, 2, 2) + at(RW, 2, 2) -
-      mB *
-        (h * pc[0] + pc[0] * pc[2] -
-          ct2 * (h * pc[0] * 2 + pc[0] * pc[2] * 2) -
-          sc * (h * pc[2] * 2 + h2 - pc[0] * pc[0] + pc[2] * pc[2])) -
-      ct2 * (at(IB, 2, 2) * 2 + at(LW, 2, 2) * 2 + at(RW, 2, 2) * 2) +
-      sc *
-        (at(IB, 0, 0) - at(IB, 2, 2) + at(LW, 0, 0) + at(RW, 0, 0) -
-          at(LW, 2, 2) - at(RW, 2, 2)) +
-      (L * (ct * (at(LW, 1, 0) - at(RW, 1, 0)) + st * (at(LW, 2, 1) - at(RW, 2, 1)))) / R;
+  /**
+   * Jacobians of the model about the current state: dM/dtheta, dnle/dtheta and
+   * dnle/dqdot, as POL::calculate_dM_dtheta, calculate_dnle_dtheta and
+   * calculate_dnle_dqdot compute them. Only the extended Kalman filter needs
+   * these; the plain simulation does not.
+   *
+   * The firmware's three Jacobian routines carry a family of index slips from
+   * the MATLAB derivation they were transcribed from: I(2,2) written as I(2,0),
+   * I(2,1) as I(2,0), I(1,1) as I(1,0). Counting the inertia references makes
+   * it plain - the Jacobians use I_B_B(2,0) twelve times to I_B_B(2,2)'s seven,
+   * while the functions they differentiate use (2,2) fifteen times. Checked
+   * against a finite difference of `massMatrix` and `nle`, the transcribed
+   * versions are wrong by up to a factor of seven on the yaw entries, which no
+   * Kalman filter survives. These are derived from the shared coefficients
+   * above instead, and agree with finite differences to ~1e-9.
+   */
+  jacobians(theta, thetaDot, v, psiDot) {
+    const IB = this.I_B_B;
+    const LW = this.I_LW;
+    const RW = this.I_RW;
+    const at = (A, i, j) => A[i * 3 + j];
+    const pc = this.p_bcom;
+    const { L, R } = this;
+    const mB = this.mB;
+    const h = this.h;
 
-    const n = [0, 0, 0];
+    const c = this.modelCoefficients(theta);
+    const { ct, st, sc, c2t } = c;
+    const td2 = thetaDot * thetaDot;
+    const pd2 = psiDot * psiDot;
 
-    n[0] =
-      -pd2 * gyro -
-      GRAVITY * mB * (st * (h + pc[2]) + pc[0] * ct) +
-      psiDot * v * wheelCoupling;
+    // --- dM/dtheta -------------------------------------------------------
+    const dM = new Float64Array(9);
+    // M(0,0) has no theta dependence.
+    dM[3] = mB * (-ct * pc[0] - st * (h + pc[2]));
+    dM[1] = dM[3];
+    dM[6] =
+      -st * (at(IB, 2, 1) - mB * pc[1] * (h + pc[2])) -
+      ct * (at(IB, 1, 0) - mB * pc[0] * pc[1]);
+    dM[2] = dM[6];
+    dM[7] = -c.W; // d/dtheta of the wheel term in M(2,1)
+    dM[5] = dM[7];
 
-    n[1] =
-      -mB * td2 * (st * (h + pc[2]) + pc[0] * ct) -
-      psiDot * thetaDot * wheelCoupling;
+    const Xm = c.X + mB * c.P2;
+    const Ym = 2 * (at(IB, 2, 0) + at(LW, 2, 0) + at(RW, 2, 0)) - mB * c.P1;
+    // The first term is the doubled differential wheel term inside M(2,2).
+    dM[8] =
+      (2 * L * (ct * (at(LW, 1, 0) - at(RW, 1, 0)) + st * (at(LW, 2, 1) - at(RW, 2, 1)))) / R +
+      2 * sc * Xm -
+      c2t * Ym;
 
-    n[2] =
-      -td2 *
-        (-mB * (st * (pc[1] * (h + pc[2])) + pc[0] * pc[1] * ct) +
-          at(IB, 1, 1) * ct + at(IB, 2, 2) * st) +
-      psiDot * thetaDot * 2 * gyro -
-      thetaDot * v * wheelCoupling;
+    // --- dnle/dtheta -----------------------------------------------------
+    const dnle_dtheta = [
+      -pd2 * c.dGyro - GRAVITY * mB * c.dPend + psiDot * v * c.dW,
+      -mB * td2 * c.dPend - psiDot * thetaDot * c.dW,
+      -td2 * c.dA + psiDot * thetaDot * 2 * c.dGyro - thetaDot * v * c.dW,
+    ];
 
-    return n;
+    // --- dnle/dqdot, rows = equations, columns = [theta_dot, v, psi_dot] ---
+    const dq = new Float64Array(9);
+    dq[0] = 0;
+    dq[1] = psiDot * c.W;
+    dq[2] = -2 * psiDot * c.gyro + v * c.W;
+
+    dq[3] = -2 * mB * thetaDot * c.pend - psiDot * c.W;
+    dq[4] = 0;
+    dq[5] = -thetaDot * c.W;
+
+    dq[6] = -2 * thetaDot * c.A + 2 * psiDot * c.gyro - v * c.W;
+    dq[7] = -thetaDot * c.W;
+    dq[8] = 2 * thetaDot * c.gyro;
+
+    return { dM_dtheta: dM, dnle_dtheta, dnle_dqdot: dq };
+  }
+
+  /**
+   * Continuous-time state Jacobian df/dx (POL::calculate_fx), about (x, u),
+   * as a row-major 4x4. Returns null on a singular mass matrix.
+   */
+  stateJacobian(x, u) {
+    const [theta, thetaDot, v, psiDot] = x;
+    const M = this.massMatrix(theta);
+    const Minv = mat3.inverse(M);
+    if (!Minv) return null;
+
+    const n = this.nle(theta, thetaDot, v, psiDot);
+    const { dM_dtheta, dnle_dtheta, dnle_dqdot } = this.jacobians(theta, thetaDot, v, psiDot);
+
+    const rhs = [0, 0, 0];
+    for (let i = 0; i < 3; i++) {
+      rhs[i] = -n[i] + this.B[i][0] * u[0] + this.B[i][1] * u[1];
+    }
+    const qdd = mat3.apply(Minv, rhs);
+
+    // first column: -M^-1 (dM/dtheta * qdd + dnle/dtheta)
+    const inner = mat3.apply(dM_dtheta, qdd).map((z, i) => -(z + dnle_dtheta[i]));
+    const col0 = mat3.apply(Minv, inner);
+    // lower-right block: -M^-1 dnle/dqdot
+    const block = mat3.mul(Minv, dnle_dqdot);
+
+    const fx = new Float64Array(16); // row-major 4x4
+    fx[1] = 1; // d(theta)/d(theta_dot)
+    for (let i = 0; i < 3; i++) {
+      fx[(i + 1) * 4] = col0[i];
+      for (let j = 0; j < 3; j++) fx[(i + 1) * 4 + (j + 1)] = -block[i * 3 + j];
+    }
+    return fx;
   }
 
   /**

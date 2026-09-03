@@ -130,7 +130,8 @@
         gap: 14px;
         user-select: none;
       }
-      body.replay .pads { display: none; }
+      body.replay .pads,
+      body.replay #estimator-controls { display: none; }
       .cluster { display: flex; flex-direction: column; align-items: center; gap: 6px; }
       .cluster-row { display: flex; gap: 6px; }
       .key {
@@ -263,6 +264,18 @@
           <output id="rate-value">1.00×</output>
         </div>
         <button class="plain" id="play-pause">Pause</button>
+      </section>
+
+      <section id="estimator-controls">
+        <h2>Estimator</h2>
+        <label class="check">
+          <input id="use-estimate" type="checkbox" checked /> Close loop on EKF estimate
+        </label>
+        <div class="row">
+          <label for="noise">Sensor noise</label>
+          <input id="noise" type="range" min="0" max="3" step="0.05" value="1" />
+          <output id="noise-value">1.00×</output>
+        </div>
       </section>
 
       <section>

@@ -16,6 +16,8 @@ import { POL } from './src/pol.js';
 import { LQRController } from './src/lqr.js';
 import { DT, LIMITS, HIP_SERVO } from './src/params.js';
 import { clamp } from './src/mat.js';
+import { EKF } from './src/ekf.js';
+import { measure } from './src/sensors.js';
 import { Robot3D, buildScene } from './src/robot3d.js';
 import { Hud } from './src/hud.js';
 import { LogPlayer, LOGS } from './src/logplayer.js';
@@ -69,6 +71,10 @@ window.addEventListener('resize', () => {
 // --------------------------------------------------------------------------
 const pol = new POL();
 const lqr = new LQRController();
+// The estimator runs on the same POL instance as the plant, so there is no
+// parameter mismatch between model and truth: what the filter has to cope with
+// is sensor noise plus the observation model's dropped acceleration terms.
+const ekf = new EKF(pol);
 
 const sim = {
   x: [0, 0, 0, 0], // [theta, theta_dot, v, psi_dot]
@@ -80,6 +86,10 @@ const sim = {
   fallen: false,
   fallenAt: 0,
   time: 0,
+  xHat: [0, 0, 0, 0], // EKF estimate
+  estError: [0, 0, 0, 0], // estimate minus truth, compared at the same instant
+  useEstimate: true, // close the loop on the estimate, as the firmware does
+  noiseScale: 1,
 };
 
 function resetSim() {
@@ -90,6 +100,9 @@ function resetSim() {
   sim.u = [0, 0];
   sim.fallen = false;
   sim.time = 0;
+  sim.xHat = [0, 0, 0, 0];
+  sim.estError = [0, 0, 0, 0];
+  ekf.reset();
   banner.classList.remove('show');
 }
 
@@ -119,9 +132,30 @@ function stepSim(dt) {
   pol.setHR(sim.hCmd, sim.phiCmd);
   pol.computeComAndInertia();
 
+  // Sense, then estimate. The measurement is generated from the true state and
+  // its true accelerations; the filter's observation model drops those, so it
+  // faces the same modelling error it does on the robot.
+  const xdotTrue = pol.derivative(sim.x, sim.u);
+  if (xdotTrue) {
+    const z = measure(sim.x, xdotTrue, pol, sim.noiseScale);
+    const xhat = ekf.step(z, sim.u, dt);
+    if (xhat) {
+      sim.xHat = xhat.slice();
+      // Compare against the truth the measurement was taken from, before this
+      // step integrates it forward - otherwise the readout shows one step of
+      // state change (0.5 deg at 1 rad/s) as if it were estimation error.
+      sim.estError = xhat.map((e, i) => e - sim.x[i]);
+    } else if (!sim.fallen) {
+      // The firmware cuts the motors when the estimator faults; do the same.
+      sim.fallen = true;
+      sim.fallenAt = sim.time;
+    }
+  }
+
   const xd = [pol.thetaEquilibrium(), 0, vCmd, yawCmd];
   lqr.computeGain(sim.hCmd);
-  sim.u = sim.fallen ? [0, 0] : lqr.computeInput(xd, sim.x);
+  const measured = sim.useEstimate ? sim.xHat : sim.x;
+  sim.u = sim.fallen ? [0, 0] : lqr.computeInput(xd, measured);
 
   const f = pol.derivative(sim.x, sim.u);
   if (!f) {
@@ -239,6 +273,13 @@ el('follow').addEventListener('change', (e) => {
 });
 el('show-com').addEventListener('change', (e) => {
   robot.showCom = e.target.checked;
+});
+el('use-estimate').addEventListener('change', (e) => {
+  sim.useEstimate = e.target.checked;
+});
+el('noise').addEventListener('input', (e) => {
+  sim.noiseScale = Number(e.target.value);
+  el('noise-value').textContent = `${sim.noiseScale.toFixed(2)}×`;
 });
 el('reset').addEventListener('click', resetSim);
 el('push').addEventListener('click', () => push(3.2));
@@ -386,6 +427,7 @@ function frame(now) {
     } else if (!replay.active) {
       hud.push({
         theta: sim.x[0],
+        thetaHat: sim.xHat[0],
         v: sim.x[2],
         psiDot: sim.x[3],
         tauR: sim.u[0],
@@ -423,6 +465,10 @@ function updateReadout(h, theta, v, psiDot, u, t) {
     <div><span>τ right / left</span><b>${u[0].toFixed(3)} / ${u[1].toFixed(3)} N·m</b></div>
     <div><span>hip servos</span><b class="${clipped ? 'warn' : ''}">${hips[0].toFixed(1)}° / ${hips[1].toFixed(1)}°</b></div>
     <div><span>CoM offset</span><b>${(pol.p_bcom[0] * 1000).toFixed(1)}, ${(pol.p_bcom[2] * 1000).toFixed(1)} mm</b></div>
+    ${replay.active ? '' : `
+    <div><span>θ estimate error</span><b>${deg(sim.estError[0])}°</b></div>
+    <div><span>v estimate error</span><b>${sim.estError[2].toFixed(4)} m/s</b></div>
+    <div><span>tr(P)</span><b>${ekf.uncertainty().toExponential(2)}</b></div>`}
   `;
 }
 

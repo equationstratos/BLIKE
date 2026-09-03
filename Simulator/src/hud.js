@@ -58,8 +58,11 @@ export class Hud {
     for (const t of this.traces) {
       let a;
       let b = null;
-      if (t.key === 'theta') a = (sample.theta * 180) / Math.PI;
-      else if (t.key === 'tau') {
+      if (t.key === 'theta') {
+        a = (sample.theta * 180) / Math.PI;
+        // ghost line: the EKF's estimate, when there is one
+        if (sample.thetaHat !== undefined) b = (sample.thetaHat * 180) / Math.PI;
+      } else if (t.key === 'tau') {
         a = sample.tauR;
         b = sample.tauL;
       } else a = sample[t.key];

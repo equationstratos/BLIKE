@@ -4,8 +4,10 @@
 
 [`Simulator/`](Simulator/) — a browser 3D simulator and flight-log visualiser
 for the POW wheeled bipedal robot. It runs the robot's own control stack: the
-five-bar leg kinematics, the equivalent-body CoM and inertia aggregation, and
-the gain-scheduled LQR balance controller, all ported from the
+five-bar leg kinematics, the equivalent-body CoM and inertia aggregation, the
+extended Kalman filter fed by synthetic IMU and encoder readings, and the
+gain-scheduled LQR balance controller closing the loop around the estimate —
+all ported from the
 [Pow_WBR_Project](https://github.com/SeungbinOh/Pow_WBR_Project) firmware and
 stepped at its 8 ms period.
 
@@ -15,4 +17,5 @@ shove it with `P`. Switch to *Replay log* to play back runs recorded on the
 real hardware.
 
 See [`Simulator/README.md`](Simulator/README.md) for the model, the mapping
-back to the firmware files, and the three firmware bugs the simulator corrects.
+back to the firmware files, and the five firmware bugs the simulator corrects —
+each one confirmed numerically rather than assumed.
