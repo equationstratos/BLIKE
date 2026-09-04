@@ -65,6 +65,9 @@ export class Robot3D {
     this.group.add(this.axle);
 
     this.wheels = [];
+    this.wheelPrimitives = [];
+    this.meshGroups = [];
+    this.primitives = [];
     for (const side of [0, 1]) {
       const sign = side === 0 ? -1 : 1;
       const wheel = new THREE.Group();
@@ -76,7 +79,8 @@ export class Robot3D {
       wheel.add(tyre);
 
       const rimGeo = new THREE.CylinderGeometry(GEOM.R * 0.42, GEOM.R * 0.42, 0.03, 24);
-      wheel.add(new THREE.Mesh(rimGeo, mat(COLORS.rim, { metalness: 0.6, roughness: 0.35 })));
+      const rim = new THREE.Mesh(rimGeo, mat(COLORS.rim, { metalness: 0.6, roughness: 0.35 }));
+      wheel.add(rim);
 
       // A spoke, so the wheel's rotation is legible at a glance.
       const spokeGeo = new THREE.BoxGeometry(GEOM.R * 1.7, 0.032, 0.012);
@@ -85,6 +89,7 @@ export class Robot3D {
 
       this.axle.add(wheel);
       this.wheels.push(wheel);
+      this.wheelPrimitives.push([tyre, rim, spoke]);
     }
 
     // --- body and legs -----------------------------------------------------
@@ -97,6 +102,7 @@ export class Robot3D {
 
     const chassisGeo = new THREE.BoxGeometry(CHASSIS.sx, CHASSIS.sy, CHASSIS.sz);
     const chassis = new THREE.Mesh(chassisGeo, mat(COLORS.chassis, { roughness: 0.65 }));
+    this.chassis = chassis;
     chassis.position.set(CHASSIS.cx, CHASSIS.cy, CHASSIS.cz);
     chassis.castShadow = true;
     this.body.add(chassis);
@@ -106,6 +112,7 @@ export class Robot3D {
     );
     edges.position.copy(chassis.position);
     this.body.add(edges);
+    this.chassisEdges = edges;
 
     // A short nose so "forward" is unambiguous while driving.
     const nose = new THREE.Mesh(
@@ -115,10 +122,22 @@ export class Robot3D {
     nose.rotation.z = -Math.PI / 2;
     nose.position.set(CHASSIS.cx + CHASSIS.sx / 2 + 0.022, 0, CHASSIS.cz);
     this.body.add(nose);
+    this.nose = nose;
 
     const matActive = mat(COLORS.thighActive, { metalness: 0.4 });
     const matPassive = mat(COLORS.thighPassive, { metalness: 0.5 });
     const matCalf = mat(COLORS.calf, { metalness: 0.35, roughness: 0.45 });
+
+    // One group per link, carrying that link's frame exactly as POL.h defines
+    // it. The primitives live inside as stand-ins; a loaded mesh replaces them.
+    this.linkFrames = {
+      thighActive: [new THREE.Group(), new THREE.Group()],
+      thighPassive: [new THREE.Group(), new THREE.Group()],
+      calf: [new THREE.Group(), new THREE.Group()],
+    };
+    for (const pair of Object.values(this.linkFrames)) {
+      for (const g of pair) this.body.add(g);
+    }
 
     this.legs = [0, 1].map(() => {
       const thighActive = segment(matActive, 0.011); // B -> C
@@ -153,6 +172,72 @@ export class Robot3D {
     this.comMarker.visible = v;
   }
 
+  /** Toggle between the CAD meshes and the primitive stand-ins. */
+  set useMeshes(v) {
+    if (!this.meshGroups.length) return;
+    for (const g of this.meshGroups) g.visible = v;
+    for (const p of this.primitives) p.visible = !v;
+  }
+
+  get hasMeshes() {
+    return this.meshGroups.length > 0;
+  }
+
+  /**
+   * Attach loaded CAD meshes. Each is already in its link's own frame, so it
+   * goes straight onto the matching group. Links without a mesh keep their
+   * primitive, which is why this works with a partial set.
+   */
+  applyMeshes(meshes) {
+    const shell = (color) =>
+      new THREE.MeshStandardMaterial({ color, metalness: 0.25, roughness: 0.62 });
+    // Colours follow the materials declared in the project's model.sdf: light
+    // shells for the structure, near-black wheels.
+    const matShell = shell(0xd6dde8);
+    const matWheel = new THREE.MeshStandardMaterial({
+      color: 0x15181d,
+      metalness: 0.2,
+      roughness: 0.85,
+    });
+
+    const attach = (geometry, parent, material, hide) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      parent.add(mesh);
+      this.meshGroups.push(mesh);
+      for (const p of hide) {
+        this.primitives.push(p);
+        p.visible = false;
+      }
+    };
+
+    if (meshes.body) attach(meshes.body, this.body, matShell, [this.chassis, this.chassisEdges, this.nose]);
+
+    for (const side of [0, 1]) {
+      const suffix = side === 0 ? 'Right' : 'Left';
+      const leg = this.legs[side];
+
+      const ta = meshes[`thighActive${suffix}`];
+      if (ta) attach(ta, this.linkFrames.thighActive[side], matShell, [leg.thighActive, leg.hip]);
+
+      const tp = meshes[`thighPassive${suffix}`];
+      if (tp) attach(tp, this.linkFrames.thighPassive[side], matShell, [leg.thighPassive]);
+
+      const calf = meshes[`calf${suffix}`];
+      if (calf) attach(calf, this.linkFrames.calf[side], matShell, [leg.calfMain, leg.calfCoupler, leg.knee]);
+
+      const wheel = meshes[`wheel${suffix}`];
+      if (wheel) {
+        const holder = new THREE.Group();
+        // model.sdf mounts the right wheel rolled by pi; the two wheels share
+        // one mesh shape and are distinguished by that rotation.
+        if (side === 0) holder.rotation.x = Math.PI;
+        this.wheels[side].add(holder);
+        attach(wheel, holder, matWheel, this.wheelPrimitives[side]);
+      }
+    }
+  }
+
   /**
    * Push a simulation state onto the scene graph.
    *
@@ -183,6 +268,18 @@ export class Robot3D {
       leg.hip.position.set(...p.B);
       leg.knee.position.set(...p.D);
 
+      // Link frames, for the CAD meshes. These are the poses the project's
+      // model.sdf lists, and they agree with it to nine decimal places.
+      const fa = this.linkFrames.thighActive[side];
+      fa.position.set(...p.B);
+      fa.rotation.set(0, pol.thetaB[side], 0);
+      const fp = this.linkFrames.thighPassive[side];
+      fp.position.set(...p.A);
+      fp.rotation.set(0, pol.thetaA[side], 0);
+      const fc = this.linkFrames.calf[side];
+      fc.position.set(...p.C);
+      fc.rotation.set(0, pol.thetaK[side], 0);
+
       // Ground speed of this wheel: v +/- L * psi_dot.
       const vWheel = vel.v + sign * -1 * GEOM.L * vel.psiDot;
       this.wheelAngle[side] += (vWheel / GEOM.R) * dt;
@@ -205,18 +302,26 @@ export function buildScene(scene, parent) {
   const hemi = new THREE.HemisphereLight(0x9fc4ff, 0x2a3038, 1.15);
   parent.add(hemi);
 
+  // The shadow frustum is kept tight around the robot and moved with it (see
+  // followLight): a wide one spreads its texels so thin over the CAD meshes'
+  // fine geometry that the self-shadowing reads as blotches on flat panels.
   const key = new THREE.DirectionalLight(0xffffff, 1.6);
-  key.position.set(3, -4, 6);
+  key.position.set(1.2, -1.6, 2.4);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  const d = 2.2;
+  const d = 0.55;
   key.shadow.camera.left = -d;
   key.shadow.camera.right = d;
   key.shadow.camera.top = d;
   key.shadow.camera.bottom = -d;
-  key.shadow.camera.far = 20;
-  key.shadow.bias = -0.0012;
+  key.shadow.camera.near = 0.1;
+  key.shadow.camera.far = 8;
+  key.shadow.bias = -0.0004;
+  // normalBias offsets the lookup along the surface normal, which is what
+  // actually clears acne on detailed meshes; bias alone cannot.
+  key.shadow.normalBias = 0.012;
   parent.add(key);
+  parent.add(key.target);
   const fill = new THREE.DirectionalLight(0x4b6ea8, 0.35);
   fill.position.set(-4, 3, 2);
   parent.add(fill);
@@ -234,5 +339,15 @@ export function buildScene(scene, parent) {
   grid.position.z = 0.001;
   parent.add(grid);
 
-  return { key };
+  return { key, followLight };
+}
+
+/**
+ * Keep the key light (and so its shadow frustum) centred on the robot, in the
+ * +z up frame. `at` is the robot's ground position.
+ */
+function followLight(key, at) {
+  key.position.set(at[0] + 1.2, at[1] - 1.6, 2.4);
+  key.target.position.set(at[0], at[1], 0);
+  key.target.updateMatrixWorld();
 }

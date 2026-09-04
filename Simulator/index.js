@@ -19,6 +19,7 @@ import { clamp } from './src/mat.js';
 import { EKF } from './src/ekf.js';
 import { measure } from './src/sensors.js';
 import { Robot3D, buildScene } from './src/robot3d.js';
+import { loadLinkMeshes, LINK_MESHES } from './src/meshes.js';
 import { Hud } from './src/hud.js';
 import { LogPlayer, LOGS } from './src/logplayer.js';
 
@@ -37,7 +38,7 @@ const scene = new THREE.Scene();
 const world = new THREE.Group();
 world.rotation.x = -Math.PI / 2;
 scene.add(world);
-buildScene(scene, world);
+const { key: keyLight, followLight } = buildScene(scene, world);
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 120);
 // Slightly off the centreline: dead astern hides the leg linkage behind the chassis.
@@ -274,6 +275,9 @@ el('follow').addEventListener('change', (e) => {
 el('show-com').addEventListener('change', (e) => {
   robot.showCom = e.target.checked;
 });
+el('use-meshes').addEventListener('change', (e) => {
+  robot.useMeshes = e.target.checked;
+});
 el('use-estimate').addEventListener('change', (e) => {
   sim.useEstimate = e.target.checked;
 });
@@ -389,6 +393,10 @@ function frame(now) {
     );
   }
 
+  // Keep the shadow frustum over the robot wherever it has driven to.
+  const ground = replay.active ? replay.pose : sim.pose;
+  followLight(keyLight, [ground.x, ground.y]);
+
   // Camera. The chase camera drives camera.position directly, so OrbitControls
   // has to stand down while it is on - left enabled, it would recompute the
   // position from its own spherical offset every update and undo the lerp.
@@ -471,6 +479,26 @@ function updateReadout(h, theta, v, psiDot, u, t) {
     <div><span>tr(P)</span><b>${ekf.uncertainty().toExponential(2)}</b></div>`}
   `;
 }
+
+// CAD meshes load in the background: the simulator is fully usable on the
+// primitives, and each link swaps over as its mesh arrives.
+loadLinkMeshes().then(({ meshes, missing }) => {
+  const found = Object.keys(meshes);
+  const toggle = el('use-meshes');
+  const status = el('mesh-status');
+
+  if (!found.length) {
+    toggle.disabled = true;
+    status.textContent = 'no CAD meshes converted yet — showing primitives';
+    return;
+  }
+
+  robot.applyMeshes(meshes);
+  robot.useMeshes = toggle.checked;
+  status.textContent = missing.length
+    ? `${found.length} of ${Object.keys(LINK_MESHES).length} links from CAD; the rest are primitives`
+    : `all ${found.length} links from CAD`;
+});
 
 resize();
 resetSim();

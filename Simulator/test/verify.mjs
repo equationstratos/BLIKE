@@ -195,5 +195,54 @@ console.log('\nEstimator bias — isolating the dropped acceleration terms');
   check('bias appears only under acceleration', withAcc > 0.1 && withAcc < 1, `${withAcc.toFixed(3)}° at 0.8 m/s`);
 }
 
+// ---------------------------------------------------------------------------
+// The project also ships a Gazebo model (reference/model.sdf) built from the
+// CAD. Its link poses are an account of the same linkage written down
+// independently of the firmware this simulator was ported from, so agreeing
+// with it is real evidence rather than a self-consistency check.
+console.log('\nCross-check against the Gazebo model in reference/model.sdf');
+{
+  const p = new POL();
+  const hipAt = (h) => { p.setHR(h, 0); p.computeComAndInertia(); return p.thetaHips[0]; };
+
+  // The SDF is posed at theta_B = 0: its Calf_Right sits exactly at
+  // (-(a + l2), -0.102, b). Solve for the height that produces that.
+  let lo = 0.07;
+  let hi = 0.2;
+  for (let i = 0; i < 200; i++) {
+    const m = (lo + hi) / 2;
+    if (hipAt(lo) * hipAt(m) <= 0) hi = m; else lo = m;
+  }
+  const h = (lo + hi) / 2;
+  p.setHR(h, 0);
+  p.computeComAndInertia();
+  const q = p.legPoints(0);
+
+  // Angles and the calf origin should match to numerical precision.
+  const exact = [
+    ['theta_A', p.thetaA[0], 0.02631897651],
+    ['theta_K', p.thetaK[0], 0.767322043371783],
+    ['calf origin x', q.C[0], -0.141951905284],
+    ['calf origin z', q.C[2], 0.0375],
+  ];
+  let worst = 0;
+  for (const [, a, b] of exact) worst = Math.max(worst, Math.abs(a - b));
+  check('link angles and calf origin match the SDF', worst < 1e-8, `worst ${worst.toExponential(2)}`);
+
+  // The wheel is the interesting one. The SDF puts its axle 1.8 mm forward of
+  // straight-down, because the real A->E vector is not vertical. The reduced
+  // model assumes it is - but it gets the *distance* right, which is what the
+  // dynamics actually use. This pins both halves of that statement.
+  const sdfWheel = [-0.001800801039, -0.123, -0.08655913097823];
+  const distSdf = Math.hypot(sdfWheel[0], sdfWheel[2]);
+  check('|A->E| matches the SDF', Math.abs(distSdf - h) < 2e-5, `${distSdf.toFixed(6)} m vs h = ${h.toFixed(6)} m`);
+  const forward = Math.abs(q.E[0] - sdfWheel[0]);
+  check(
+    'wheel forward offset is the known ~1.8 mm simplification',
+    forward > 1.5e-3 && forward < 2.5e-3,
+    `${(forward * 1000).toFixed(2)} mm, i.e. ${((Math.atan2(forward, h) * 180) / Math.PI).toFixed(2)}deg off vertical`,
+  );
+}
+
 console.log(`\n${failures ? `${failures} check(s) FAILED` : 'all checks passed'}\n`);
 process.exit(failures ? 1 : 0);

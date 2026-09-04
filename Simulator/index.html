@@ -114,7 +114,8 @@
         border-radius: 5px;
       }
 
-      #log-status { color: var(--muted); font-size: 11px; margin: 6px 0 9px; }
+      #log-status, #mesh-status { color: var(--muted); font-size: 11px; margin: 6px 0 9px; }
+      #mesh-status { margin: 2px 0 0 24px; }
 
       footer { color: var(--muted); font-size: 10.5px; line-height: 1.6; border-top: 1px solid var(--line); padding-top: 10px; }
       footer a { color: var(--accent); }
@@ -282,6 +283,8 @@
         <h2>View</h2>
         <label class="check"><input id="follow" type="checkbox" checked /> Chase camera</label>
         <label class="check"><input id="show-com" type="checkbox" checked /> Show centre of mass</label>
+        <label class="check"><input id="use-meshes" type="checkbox" checked /> CAD meshes</label>
+        <div id="mesh-status">loading…</div>
       </section>
 
       <section>

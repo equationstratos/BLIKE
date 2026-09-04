@@ -16,6 +16,11 @@ Drive it with `WASD`, change ride height with `Q`/`E`, crouch with `Space`,
 shove it with `P`. Switch to *Replay log* to play back runs recorded on the
 real hardware.
 
-See [`Simulator/README.md`](Simulator/README.md) for the model, the mapping
-back to the firmware files, and the five firmware bugs the simulator corrects —
-each one confirmed numerically rather than assumed.
+The robot is drawn from the project's own CAD: all nine links, converted from
+the Gazebo model's STLs down to 884 kB with a quarter of a millimetre of
+surface error.
+
+See [`Simulator/README.md`](Simulator/README.md) for the model, the mapping back
+to the firmware files, the five firmware bugs the simulator corrects — each
+confirmed numerically rather than assumed — and what the Gazebo model
+independently confirms about the kinematics.

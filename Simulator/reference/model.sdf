@@ -1,0 +1,582 @@
+<?xml version="1.0" ?>
+<sdf version="1.5">
+  <world name="Moving_robot">
+    <!-- <physics 
+      name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin 
+      filename="gz-sim-physics-system" 
+      name="gz::sim::systems::Physics">
+    </plugin>
+    <plugin 
+      filename="gz-sim-user-commands-system" 
+      name="gz::sim::systems::UserCommands">
+    </plugin>
+    <plugin 
+      filename="gz-sim-scene-broadcaster-system" 
+      name="gz::sim::systems::SceneBroadcaster">
+    </plugin> -->
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.8 0.8 0.8 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wheel_biped_robot">
+      <self_collide>true</self_collide>
+      <pose>0 0 0.18 0 0 0</pose>
+      <!--pose>0 0 0.1477778611 0 0 0</pose-->
+
+      <!-- Body -->
+      <link name="Mainbody">
+        <pose>0 0 0 0 0 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/MainBody_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/MainBody_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>1.41404421338</mass>
+          <pose>0.01819659659 -0.00024888409 0.03542269696 0 0 0</pose>
+          <inertia>
+            <ixx>0.004191453724966</ixx>
+            <ixy>0.000019611026617</ixy>
+            <ixz>0.000183001274225</ixz>
+            <iyy>0.006619178754250</iyy>
+            <iyz>0.000006399950187</iyz>
+            <izz>0.007735669494723</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <!-- right side links -->
+      <link name="Thigh_Active_Right">
+        <pose>-0.064951905284  -0.086 0.0375 0 0 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Active_Right_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Active_Right_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.04241994494</mass>
+          <pose>-0.04846902377 -0.00461143086 0.00204281842 0 0 0</pose>
+          <inertia>
+            <ixx>0.000005006896996300</ixx>
+            <ixy>-0.000006444247425260</ixy>
+            <ixz>-0.000000846350964990</ixz>
+            <iyy>0.000048849855931520</iyy>
+            <iyz>-0.000000404383743700</iyz>
+            <izz>0.000049929410233640</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <link name="Thigh_Passive_Right">
+        <pose>0 -0.081 0 0 0.02631897651 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Passive_Right_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Passive_Right_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.03926139565</mass>
+          <pose>-0.07721916722 -0.01027201342 -0.00386042407 0 0 0</pose>
+          <inertia>
+            <ixx>0.000005253535542220</ixx>
+            <ixy>-0.000005957246863360</ixy>
+            <ixz>0.000002247315833890</ixz>
+            <iyy>0.000060185494515380</iyy>
+            <iyz>0.000000799056070920</iyz>
+            <izz>0.000060398225116460</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <link name="Calf_Right">
+        <pose>-0.141951905284  -0.102 0.0375 0 0.767322043371783 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/Calf_Link_Right_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/Calf_Link_Right_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.33823782393</mass>
+          <pose>0.16971091698 0.00392574726 0.00713537305 0 0 0</pose>
+          <inertia>
+            <ixx>0.000108187868305990</ixx>
+            <ixy>0.000005689137620610</ixy>
+            <ixz>-0.000034348435846100</ixz>
+            <iyy>0.000849621316459050</iyy>
+            <iyz>0.000000266268924720</iyz>
+            <izz>0.000820314860808290</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <link name="Wheel_Right">
+        <pose>-0.001800801039  -0.123 -0.08655913097823 3.141592654 0 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/Wheel_Right_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>            <!-- 어두운 회색 주변광 -->
+            <diffuse>0 0 0 1</diffuse>            <!-- 검은색 확산광 -->
+            <specular>0.1 0.1 0.1 1</specular>            <!-- 적은 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/Wheel_Right_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.21411770281</mass>
+          <pose>-0.00000761 0.48438625 -0.00000031 0 0 0</pose>
+          <inertia>
+            <ixx>0.000334104602957420</ixx>
+            <ixy>-0.0000000006922620</ixy>
+            <ixz>-0.0000000000451200</ixz>
+            <iyy>0.000640742795079830</iyy>
+            <iyz>0.0000000000059870</iyz>
+            <izz>0.000334104655850370</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <!-- left side links-->
+      <link name="Thigh_Active_Left">
+        <pose>-0.064951905284  0.086 0.0375 0 0 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Active_Left_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Active_Left_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.04241994494</mass>
+          <pose>-0.04846903323 0.00461143087 0.00204282631 0 0 0</pose>
+          <inertia>
+            <ixx>0.000005006895683980</ixx>
+            <ixy>0.000006444245553680</ixy>
+            <ixz>-0.000000846350231280</ixz>
+            <iyy>0.000048849838353730</iyy>
+            <iyz>0.000000404385235010</iyz>
+            <izz>0.000049929393964280</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <link name="Thigh_Passive_Left">
+        <pose>0 0.081 0 0 0.02631897651 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Passive_Left_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/ThighLink_Passive_Left_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.03926139565</mass>
+          <pose>-0.07721916722 0.01027201342 -0.00386042407 0 0 0</pose>
+          <inertia>
+            <ixx>0.000005253535548320</ixx>
+            <ixy>0.000005957246863210</ixy>
+            <ixz>0.000002247315834350</ixz>
+            <iyy>0.000060185494514520</iyy>
+            <iyz>-0.000000799056070960</iyz>
+            <izz>0.000060398225109490</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <link name="Calf_Left">
+        <pose>-0.141951905284  0.102 0.0375 0 0.767322043371783 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/Calf_Link_Left_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>            <!-- 흰색 주변광 -->
+            <diffuse>1 1 1 1</diffuse>            <!-- 흰색 확산광 -->
+            <specular>0.5 0.5 0.5 1</specular>            <!-- 약간의 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/Calf_Link_Left_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.33823782393</mass>
+          <pose>0.1697107318 -0.00392577446 0.00713663078 0 0 0</pose>
+          <inertia>
+            <ixx>0.000108187533749900</ixx>
+            <ixy>-0.000005688744896090</ixy>
+            <ixz>-0.000034349398689300</ixz>
+            <iyy>0.000849624615145120</iyy>
+            <iyz>-0.000000272203467970</iyz>
+            <izz>0.000820318285174880</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <link name="Wheel_Left">
+        <pose>-0.00180080103943   0.123 -0.08655913097823 0 0 0</pose>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/Wheel_Left_Visual.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>            <!-- 어두운 회색 주변광 -->
+            <diffuse>0 0 0 1</diffuse>            <!-- 검은색 확산광 -->
+            <specular>0.1 0.1 0.1 1</specular>            <!-- 적은 반사광 -->
+            <emissive>0 0 0 0</emissive>            <!-- 발광 없음 -->
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/Wheel_Left_Collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <inertial>
+          <mass>0.23711770281</mass>
+          <pose>-0.00000687 0.43740164 -0.00000028 0 0 0</pose>
+          <inertia>
+            <ixx>0.000377169502363060</ixx>
+            <ixy>-0.0000000006845310</ixy>
+            <ixz>-0.0000000001146860</ixz>
+            <iyy>0.000723999028075260</iyy>
+            <iyz>0.0000000000062050</iyz>
+            <izz>0.000377169522061000</izz>
+          </inertia>
+        </inertial>
+      </link>
+
+
+      <!-- right side joints-->
+      <joint name="B2TAR" type="revolute">
+        <parent>Mainbody</parent>
+        <child>Thigh_Active_Right</child>
+        <pose>0 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <lower>-1.2212</lower>
+            <upper>0.518</upper>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="TAR2CR" type="revolute">
+        <parent>Thigh_Active_Right</parent>
+        <child>Calf_Right</child>
+        <pose>0 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="CR2TPR" type="revolute">
+        <parent>Calf_Right</parent>
+        <child>Thigh_Passive_Right</child>
+        <pose>-0.106 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="TPR2B" type="revolute">
+        <parent>Thigh_Passive_Right</parent>
+        <child>Mainbody</child>
+        <pose>0 -0.081 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="CR2WR" type="revolute">
+        <parent>Calf_Right</parent>
+        <child>Wheel_Right</child>
+        <pose>0 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <!-- left side joints-->
+      <joint name="B2TAL" type="revolute">
+        <parent>Mainbody</parent>
+        <child>Thigh_Active_Left</child>
+        <pose>0 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <lower>-1.2212</lower>
+            <upper>0.518</upper>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="TAL2CL" type="revolute">
+        <parent>Thigh_Active_Left</parent>
+        <child>Calf_Left</child>
+        <pose>0 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="CL2TPL" type="revolute">
+        <parent>Calf_Left</parent>
+        <child>Thigh_Passive_Left</child>
+        <pose>-0.106 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="TPL2B" type="revolute">
+        <parent>Thigh_Passive_Left</parent>
+        <child>Mainbody</child>
+        <pose>0 0.081 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <joint name="CL2WL" type="revolute">
+        <parent>Calf_Left</parent>
+        <child>Wheel_Left</child>
+        <pose>0 0 0 0 0 0</pose>        <!-- 실제 위치로 설정 -->
+        <axis>
+          <xyz>0 1 0</xyz>          <!-- 회전 축 설정 -->
+          <limit>
+            <!--dissipation>0.001</dissipation-->
+          </limit>
+        </axis>
+      </joint>
+
+      <link name="imu_link">
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <box size="0.1 0.1 0.1"/>
+          </geometry>
+        </collision>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+	            <box size="0.1 0.1 0.1"/>
+            </geometry>
+            <material name="orange"/>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="0.1"/>
+            <inertia
+	        ixx="0.00016667" ixy="0.0" ixz="0.0"
+	        iyy="0.00016667" iyz="0.0"
+	        izz="0.00016667"/>
+        </inertial>
+      </link>
+
+      <gazebo reference="imu_link">
+        <gravity>true</gravity>
+        <sensor name="imu_sensor" type="imu">
+          <always_on>true</always_on>
+          <update_rate>30</update_rate>
+          <visualize>true</visualize>
+          <topic>__default_topic__</topic>
+          <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
+            <topicName>imu</topicName>
+            <bodyName>imu_link</bodyName>
+            <updateRateHZ>30.0</updateRateHZ>
+            <gaussianNoise>0.0</gaussianNoise>
+            <xyzOffset>0 0 0</xyzOffset>
+            <rpyOffset>0 0 0</rpyOffset>
+            <frameName>imu_link</frameName>
+            <initialOrientationAsReference>false</initialOrientationAsReference>
+          </plugin>
+          <pose>0 0 0 0 0 0</pose>
+        </sensor>
+      </gazebo>
+      <!-- IMU 링크를 body에 고정 -->
+      <joint name="B2IMU" type="fixed">
+        <parent>Mainbody</parent>
+        <child>imu_link</child>
+        <pose>0 0 0 0 0 0</pose>
+      </joint>
+
+      <plugin name="gazebo_ros_joint_state_publisher"
+        filename="libgazebo_ros_joint_state_publisher.so">
+        <update_rate>20</update_rate>
+        <joint_name>B2TAR</joint_name>
+        <joint_name>B2TAL</joint_name>
+        <joint_name>CR2WR</joint_name>
+        <joint_name>CL2WL</joint_name>
+      </plugin>
+    </model>
+  </world>
+</sdf>

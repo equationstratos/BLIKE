@@ -21,6 +21,10 @@ hard enough.
 hardware, so you can watch what actually happened during a balancing run, a
 squat, a top-speed pass or a yaw-rate test, with the telemetry beside it.
 
+The robot you see is the real one: all nine links are the project's own CAD,
+converted from the Gazebo model's STLs. Untick *CAD meshes* to fall back to the
+primitive stand-ins.
+
 ## Controls
 
 | Key       | Action                                    |
@@ -62,6 +66,45 @@ too, the steady-state pitch error is exactly 0.000°; with the true
 accelerations present it is 0.221° at 0.8 m/s, and zero at rest. The bias only
 appears while accelerating, which is precisely what you would expect.
 
+## The CAD meshes
+
+`meshes/` holds one file per link, converted from the STLs of the project's
+Gazebo model (`reference/model.sdf`) by `tools/stl2powm.py`:
+
+```
+python3 tools/stl2powm.py path/to/*_Visual.stl -o meshes --faces 6000 --report
+```
+
+The tool welds the STL's duplicated corners, decimates with quadric edge
+collapse, quantises positions to int16 over the bounding box, and writes a small
+indexed binary the loader reads straight into a BufferGeometry. Going in, the
+nine visual STLs total about 12 MB and 400k triangles; coming out they are
+884 kB, and `--report` measures what that costs:
+
+| link | faces | size | mean surface error |
+| --- | --- | --- | --- |
+| MainBody | 12000 | 176 kB | 0.142 mm |
+| Thigh, active (each) | 6000 | 87 kB | 0.07–0.08 mm |
+| Thigh, passive (each) | 6000 | 87 kB | 0.04–0.05 mm |
+| Calf (each) | 6000 | 88 kB | 0.24–0.27 mm |
+| Wheel (each) | 6000 | 88 kB | 0.12 mm |
+
+The body gets twice the budget because it is the part you look at most; at
+6000 faces its error doubles to 0.29 mm.
+
+Two details in the loader are worth knowing. The writer pads the vertex block to
+a 4-byte boundary — an odd vertex count would otherwise put the index block at a
+2-byte offset, where a `Uint32Array` view simply cannot start, and exactly one of
+the two calves tripped over that. And normals are built with a 42° crease angle
+rather than flat: decimation moves vertices by a few tenths of a millimetre,
+which is enough to tilt a large triangle and make a flat panel look shattered
+under a specular highlight, while fully smooth normals would round off every
+machined edge.
+
+Each STL is already expressed in its own link's frame — the same frames `POL.h`
+works in — so a mesh drops onto its joint group with no extra transform. That
+this is true is not an assumption; see below.
+
 ## Where the numbers come from
 
 Everything physical is transcribed from
@@ -77,6 +120,8 @@ Everything physical is transcribed from
 | `src/sensors.js`         | `ESP32/WBR_Control/EKF.h` — the observation model and its Jacobian, run forwards to synthesise measurements |
 | `index.js` control order | `ESP32/WBR_Control/WBR_Control.ino` — the sequence of the main loop |
 | `data/*.csv`             | `MATLAB/log_plot/` and `MATLAB/test_data/`, thinned to ~4000 samples and reduced to the state/reference/torque columns |
+| `meshes/*.powm`          | the Gazebo model's per-link visual STLs, decimated (see above) |
+| `reference/model.sdf`    | the project's Gazebo model, kept as the source of the link frames and as an independent check on the kinematics |
 
 The chassis box you see is not a guess: its dimensions are recovered from the
 body inertia tensor in `Params.h` (207 × 144 × 114 mm), and it is drawn at the
@@ -150,6 +195,55 @@ h = 114 mm. That discrepancy is inherited as-is, since it is what the hardware
 actually commands. `test/verify.mjs` pins the figure so it cannot drift
 unnoticed.
 
+### What the Gazebo model independently confirms
+
+The project also carries a Gazebo model, built from the CAD, which writes down
+the same linkage independently of the firmware this simulator was ported from.
+It is posed at zero hip angle, and solving for the height that produces that
+(86.578 mm) lets every link be compared directly:
+
+| quantity | this simulator | model.sdf |
+| --- | --- | --- |
+| θ_A | 0.026318977 | 0.02631897651 |
+| θ_K | 0.767322043 | 0.767322043371783 |
+| calf origin | (−0.141951905, −0.102, 0.0375) | (−0.141951905284, −0.102, 0.0375) |
+| wheel axle | (0, −0.123, −0.086578) | (−0.001800801, −0.123, −0.086559) |
+
+The angles and the calf origin agree to 1.6e-12 — the two accounts of the leg
+are the same account. That is the strongest evidence here that the kinematics
+port is right, because nothing about the SDF was used to build it.
+
+The wheel is the interesting row, and it explains the IK/FK discrepancy noted
+above. `|A→E|` from the SDF is 0.086578 m, which is *exactly* the model's `h`:
+the firmware has the distance right. What it does not have is the direction —
+the real axle sits 1.8 mm forward of straight down, 1.19° off vertical. The
+reduced model assumes the leg drops the wheel vertically below the hip, and
+that one assumption is the whole of the 2.30 mm inconsistency. Since the
+dynamics only ever use the distance, the simplification costs nothing there;
+it is purely a statement about where the wheel is drawn. `test/verify.mjs` pins
+all of it.
+
+### One thing the two sources disagree about
+
+The masses in `model.sdf` are not the masses in `Params.h`:
+
+| link | Params.h | model.sdf |
+| --- | --- | --- |
+| Mainbody | 1524.76 g | 1414.04 g |
+| Thigh, passive (each) | 38.26 g | 39.26 g |
+| Calf (each) | 319.24 g | 338.24 g |
+| everything else | — | identical |
+
+Wheels and active thighs match to the microgram, so this is not a re-measure of
+the whole robot: 110.7 g has moved off the body and 40 g onto the legs, leaving
+the equivalent body 3.04% lighter in the Gazebo model. Mass distributed lower
+down changes `M`, `nle` and the equilibrium pitch, and the LQR gain schedule was
+computed for one of the two.
+
+This simulator uses `Params.h` throughout, because that is what the firmware on
+the robot actually runs — but if the Gazebo figures are the more recent
+measurement, the gains deserve a second look.
+
 ## Checking it
 
 ```
@@ -177,15 +271,19 @@ src/sensors.js      observation model and synthetic IMU / encoder readings
 src/robot3d.js      three.js robot assembly and scene
 src/hud.js          rolling telemetry charts
 src/logplayer.js    CSV flight-log parsing and playback
+src/meshes.js       POWM loader and crease-angle normals
 test/verify.mjs     numerical checks for everything claimed above
+tools/stl2powm.py   STL -> POWM converter for the CAD meshes
 data/               flight logs from the real robot
+meshes/             per-link CAD geometry
+reference/          the project's Gazebo model, as delivered
 vendor/             three.js r169 (see vendor/README.md)
 ```
 
 ## Licence and attribution
 
-Three.js is MIT, vendored under `vendor/` with its licence. The robot model,
-control gains and flight logs originate from the POW capstone project by
-Seungbin Oh, Jungbin Park and Woodaengtang; see that repository for its own
+Three.js is MIT, vendored under `vendor/` with its licence. The robot model, CAD
+geometry, control gains and flight logs originate from the POW capstone project
+by Seungbin Oh, Jungbin Park and Woodaengtang; see that repository for its own
 terms. The viewer's shape — full-bleed canvas with on-screen WASD pads —
 follows the NavBot-EN01 simulator.
