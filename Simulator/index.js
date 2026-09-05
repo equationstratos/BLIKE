@@ -336,6 +336,16 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => keyUp(normalise(e)));
 window.addEventListener('blur', () => [...keys].forEach(keyUp));
 
+// A panel control keeps focus after a click, which quietly kills the keyboard:
+// the keydown handler below stands aside for focused form controls (so typing
+// is never hijacked), so after ticking one checkbox W/A/S/D and Space stop
+// driving the robot and Space just re-toggles that checkbox instead. Dropping
+// focus on pointer release fixes it for mouse and touch, while leaving a
+// keyboard user who tabbed to the control with its normal behaviour.
+for (const control of document.querySelectorAll('#panel button, #panel input, #panel select')) {
+  control.addEventListener('pointerup', () => control.blur());
+}
+
 // Pointer support for the on-screen pads.
 for (const pad of document.querySelectorAll('[data-key]')) {
   const key = pad.dataset.key;
