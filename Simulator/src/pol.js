@@ -34,7 +34,13 @@ import { mat3, vec3, parallelAxis, clamp } from './mat.js';
 const acosSafe = (x) => Math.acos(clamp(x, -1, 1));
 
 export class POL {
-  constructor() {
+  /**
+   * `bodies` and `wheels` default to the firmware's own figures from Params.h.
+   * They are arguments so the same model can be run against another mass
+   * budget - the project's Gazebo model carries a different one, and
+   * tools/compare-masses.mjs uses this to measure what the difference costs.
+   */
+  constructor(bodies = BODIES, wheels = WHEELS) {
     const { a, b, l1, l2, l3, l4, l5, L, R } = GEOM;
     Object.assign(this, { a, b, l1, l2, l3, l4, l5, L, R });
 
@@ -42,12 +48,13 @@ export class POL {
     this.angleEDF = Math.atan(l5 / l4);
     this.AB = Math.hypot(a, b);
 
-    this.mBodies = BODIES.map((x) => x.m);
+    this.bodies = bodies;
+    this.mBodies = bodies.map((x) => x.m);
     this.mB = this.mBodies.reduce((s, m) => s + m, 0);
-    this.mRW = WHEELS.right.m;
-    this.mLW = WHEELS.left.m;
-    this.I_RW = WHEELS.right.I;
-    this.I_LW = WHEELS.left.I;
+    this.mRW = wheels.right.m;
+    this.mLW = wheels.left.m;
+    this.I_RW = wheels.right.I;
+    this.I_LW = wheels.left.I;
 
     // Input matrix B (3x2), rows [theta, v, psi], columns [tau_RW, tau_LW].
     this.B = [
@@ -171,7 +178,7 @@ export class POL {
     const R = new Array(7);
     const p = new Array(7);
     R[0] = mat3.identity();
-    for (let i = 0; i < 5; i++) p[i] = BODIES[i].p;
+    for (let i = 0; i < 5; i++) p[i] = this.bodies[i].p;
     R[1] = mat3.rotY(this.thetaB[0]);
     R[2] = mat3.rotY(this.thetaB[1]);
     R[3] = mat3.rotY(this.thetaA[0]);
@@ -187,7 +194,7 @@ export class POL {
     const rB = new Array(7);
     const com = [0, 0, 0];
     for (let i = 0; i < 7; i++) {
-      rB[i] = vec3.add(p[i], mat3.apply(R[i], BODIES[i].c));
+      rB[i] = vec3.add(p[i], mat3.apply(R[i], this.bodies[i].c));
       com[0] += this.mBodies[i] * rB[i][0];
       com[1] += this.mBodies[i] * rB[i][1];
       com[2] += this.mBodies[i] * rB[i][2];
@@ -196,7 +203,7 @@ export class POL {
 
     const I = mat3.zero();
     for (let i = 0; i < 7; i++) {
-      const rot = mat3.mulT(mat3.mul(R[i], BODIES[i].I), R[i]);
+      const rot = mat3.mulT(mat3.mul(R[i], this.bodies[i].I), R[i]);
       mat3.addScaled(I, rot, 1);
       mat3.addScaled(I, parallelAxis(vec3.sub(rB[i], this.p_bcom), this.mBodies[i]), 1);
     }

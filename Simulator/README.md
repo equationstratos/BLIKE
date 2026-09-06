@@ -236,13 +236,39 @@ The masses in `model.sdf` are not the masses in `Params.h`:
 
 Wheels and active thighs match to the microgram, so this is not a re-measure of
 the whole robot: 110.7 g has moved off the body and 40 g onto the legs, leaving
-the equivalent body 3.04% lighter in the Gazebo model. Mass distributed lower
-down changes `M`, `nle` and the equilibrium pitch, and the LQR gain schedule was
-computed for one of the two.
+the equivalent body 3.04% lighter in the Gazebo model.
+
+`tools/compare-masses.mjs` runs the model against both budgets and measures what
+that costs, so the choice can be made on numbers:
+
+```
+node tools/compare-masses.mjs
+```
+
+**Stability is not the issue.** With the `Params.h` gain schedule driving either
+plant, the largest recoverable tilt and the largest recoverable shove differ by
+at most 1.8% and 0.2% across the height range. Whichever budget is right, the
+robot stays up.
+
+**The equilibrium pitch is.** `theta_eq` is where the controller aims, and it
+comes straight out of the mass budget: the two disagree by 0.57° at full height
+and 0.92° crouched. Give the controller the wrong one and the velocity loop
+spends itself holding a pitch the robot does not want, which comes out as a
+steady creep of 7–9 cm/s:
+
+| h | θ_eq gap | creep |
+| --- | --- | --- |
+| 70 mm | 0.92° | 9.3 cm/s |
+| 130 mm | 0.60° | 7.2 cm/s |
+| 200 mm | 0.57° | 7.8 cm/s |
+
+That is worth knowing because of how it presents: a robot that will not hold
+station and slowly wanders looks like drifting IMU bias or motor friction long
+before anyone suspects a mass table.
 
 This simulator uses `Params.h` throughout, because that is what the firmware on
-the robot actually runs — but if the Gazebo figures are the more recent
-measurement, the gains deserve a second look.
+the robot actually runs. If the Gazebo figures are the more recent measurement,
+the fix is not the gains — it is `theta_eq`.
 
 ## Checking it
 
@@ -274,6 +300,7 @@ src/logplayer.js    CSV flight-log parsing and playback
 src/meshes.js       POWM loader and crease-angle normals
 test/verify.mjs     numerical checks for everything claimed above
 tools/stl2powm.py   STL -> POWM converter for the CAD meshes
+tools/compare-masses.mjs  what the two mass budgets cost, measured
 data/               flight logs from the real robot
 meshes/             per-link CAD geometry
 reference/          the project's Gazebo model, as delivered
